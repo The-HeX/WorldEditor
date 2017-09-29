@@ -1,0 +1,29 @@
+name: WorldEditor
+main: worldEditor\Main
+version: 0.0.1
+api: 3.0.0-ALPHA8
+load: POSTWORLD
+author: shoghicp
+
+#Commands that your plugin has. You can capture the execution of these via the `onCommand()` method in your PluginBase, or the registered CommandExecutor for the command.
+#This node is optional and can be removed if your plugin will not have any commands.
+commands:
+ #Name of the command. This is what people will type to execute the command.
+ examplecommand:
+  #Description to show in the Help command
+  description: "Skeleton plugin example command"
+  #Usage message shown to the user if they type the command in incorrectly.
+  usage: "/examplecommand"
+  #Permission required to execute the command. This should be the name of a permission defined in the section below.
+ pos1:
+  #Description to show in the Help command
+  description: "Skeleton plugin example command"
+  #Usage message shown to the user if they type the command in incorrectly.
+  usage: "/pos1"
+  #Permission required to execute the command. This should be the name of a permission defined in the section below.
+ pos2:
+  #Description to show in the Help command
+  description: "Skeleton plugin example command"
+  #Usage message shown to the user if they type the command in incorrectly.
+  usage: "/pos2"
+  #Permission required to execute the command. This should be the name of a permission defined in the section below.
