@@ -9,21 +9,22 @@ use pocketmine\item\ItemIds;
 use pocketmine\Player;
 use pocketmine\level\Position;
 use pocketmine\math\Vector3;
+use pocketmine\block\BlockFactory;
 
 class Main extends PluginBase{
-	private $sessions, $path, $config;
-	// public function __construct(ServerAPI $api, $server = false){
-	// 	$this->api = $api;
-	// 	$this->sessions = array();
-	// }
+	private $sessions, $path, $config,$exportPath;
 
 	public function onEnable(){
 		$this->getLogger()->info("Hello World!");
-		 $this->path = $this->getDataFolder();
+		$this->path = $this->getDataFolder();
 		$this->config = new Config($this->path."config.yml", Config::YAML, array(
 			"block-limit" => -1,
 			"wand-item" => ItemIds::IRON_HOE,
 		));	
+		$this->exportPath  = $this->path .  DIRECTORY_SEPARATOR  . "exports" ;
+		if(!file_exists($this->exportPath)){
+			mkdir($this->exportPath,0777,true);
+		}
 	}
 	public function onCommand(CommandSender $sender, Command $command, string $label, array $args) : bool{
 		$output = "";
@@ -38,15 +39,51 @@ class Main extends PluginBase{
 					return false;
 				}
 				$this->setPosition1($this->session($sender),$sender->getPosition(),$output); 
-				//new Position($sender->getLocation()->x - 0.5, $sender->getLocation()->y, $sender->getLocation()->z - 0.5, $sender->getLocation()->level), $output);
 				$sender->sendMessage($output);
 				return true;
 			case "pos2":
 				$this->setPosition2($this->session($sender),$sender->getPosition(),$output); 
-				//$this->setPosition2($this->session($sender), new Position($sender->getLocation()->x - 0.5, $sender->getLocation()->y, $sender->getLocation()->z - 0.5, $sender->getLocation()->level), $output);
-			$sender->sendMessage($output);
-		return true;
-	default:
+				$sender->sendMessage($output);
+				return true;
+			case "paste":
+				if(!($sender instanceof Player)){					
+					$output .= "Please run this command in-game.\n";
+					return false;
+				}
+				$session =& $this->session($sender);
+				
+				$this->W_paste($session["clipboard"], $sender->getPosition(), $output);
+				return true;
+			case "copy":
+				if(!($sender instanceof Player)){					
+					$output .= "Please run this command in-game.\n";
+					return false;
+				}
+				$session =& $this->session($sender);
+				$count = $this->countBlocks($session["selection"], $startX, $startY, $startZ);
+				if($count > $session["block-limit"] and $session["block-limit"] > 0){
+					$output .= "Block limit of ".$session["block-limit"]." exceeded, tried to copy $count block(s).\n";
+					return false;
+				}
+				
+				$blocks = $this->W_copy($session["selection"], $output);
+				if(count($blocks) > 0){
+					$offset = array($startX - $sender->getPosition()->x - 0.5, $startY - $sender->getPosition()->y, $startZ - $sender->getPosition()->z - 0.5);
+					$session["clipboard"] = array($offset, $blocks);
+				}
+				return true;
+			case "export":
+				$session =& $this->session($sender);
+				$this->W_save($session["clipboard"],$args[0]);
+				return true;
+			case "listexports":
+				$files = scandir($this->exportPath);
+				foreach ($files as $value)
+				{
+					$sender->sendMessage($value);
+				}				
+				return true;
+		default:
 				return false;
 		}
 	}
@@ -55,6 +92,14 @@ class Main extends PluginBase{
 	}
 
 
+
+	public function W_save($clipboard,$name){
+		$path = $this->exportPath ;
+		$fp = fopen(  $path . '.json', 'w');
+		fwrite($fp, json_encode($clipboard));
+		fclose($fp);		
+		return;
+	}
 	public function &session(Player $issuer){
 		if(!isset($this->sessions[$issuer->getDisplayName()])){
 			$this->sessions[$issuer->getDisplayName()] = array(
@@ -101,33 +146,6 @@ class Main extends PluginBase{
 		}
 		
 		switch($cmd){
-			case "paste":
-				if(!($issuer instanceof Player)){					
-					$output .= "Please run this command in-game.\n";
-					break;
-				}
-				$session =& $this->session($issuer);
-				
-				$this->W_paste($session["clipboard"], $issuer->entity, $output);
-				break;
-			case "copy":
-				if(!($issuer instanceof Player)){					
-					$output .= "Please run this command in-game.\n";
-					break;
-				}
-				$session =& $this->session($issuer);
-				$count = $this->countBlocks($session["selection"], $startX, $startY, $startZ);
-				if($count > $session["block-limit"] and $session["block-limit"] > 0){
-					$output .= "Block limit of ".$session["block-limit"]." exceeded, tried to copy $count block(s).\n";
-					break;
-				}
-				
-				$blocks = $this->W_copy($session["selection"], $output);
-				if(count($blocks) > 0){
-					$offset = array($startX - $issuer->entity->x - 0.5, $startY - $issuer->entity->y, $startZ - $issuer->entity->z - 0.5);
-					$session["clipboard"] = array($offset, $blocks);
-				}
-				break;
 			case "cut":
 				if(!($issuer instanceof Player)){					
 					$output .= "Please run this command in-game.\n";
@@ -193,20 +211,6 @@ class Main extends PluginBase{
 				}
 				$this->session($issuer)["block-limit"] = $limit;
 				$output .= "Block limit set to ".($limit === -1 ? "infinite":$limit)." block(s).\n";
-				break;
-			case "pos1":
-				if(!($issuer instanceof Player)){					
-					$output .= "Please run this command in-game.\n";
-					break;
-				}
-				$this->setPosition1($this->session($issuer), new Position($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5, $issuer->entity->level), $output);
-				break;
-			case "pos2":
-				if(!($issuer instanceof Player)){					
-					$output .= "Please run this command in-game.\n";
-					break;
-				}
-				$this->setPosition2($this->session($issuer), new Position($issuer->entity->x - 0.5, $issuer->entity->y, $issuer->entity->z - 0.5, $issuer->entity->level), $output);
 				break;
 
 			case "hsphere":
@@ -317,8 +321,8 @@ class Main extends PluginBase{
 		foreach($clipboard[1] as $x => $i){
 			foreach($i as $y => $j){
 				foreach($j as $z => $block){
-					$b = BlockAPI::get(ord($block{0}), ord($block{1}));
-					$count += (int) $pos->level->setBlockRaw(new Vector3($x + $offset[0], $y + $offset[1], $z + $offset[2]), $b, false);
+					$b = BlockFactory::get(ord($block{0}), ord($block{1}));
+					$count += (int) $pos->level->setBlock(new Vector3($x + $offset[0], $y + $offset[1], $z + $offset[2]), $b, false);
 					unset($b);
 				}
 			}
@@ -348,7 +352,7 @@ class Main extends PluginBase{
 				$blocks[$x - $startX][$y - $startY] = array();
 				for($z = $startZ; $z <= $endZ; ++$z){
 					$b = $level->getBlock(new Vector3($x, $y, $z));
-					$blocks[$x - $startX][$y - $startY][$z - $startZ] = chr($b->getID()).chr($b->getMetadata());
+					$blocks[$x - $startX][$y - $startY][$z - $startZ] = chr($b->getID()).chr($b->getDamage());
 					unset($b);
 				}
 			}

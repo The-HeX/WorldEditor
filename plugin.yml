@@ -27,3 +27,19 @@ commands:
   #Usage message shown to the user if they type the command in incorrectly.
   usage: "/pos2"
   #Permission required to execute the command. This should be the name of a permission defined in the section below.
+ copy:
+  #Description to show in the Help command
+  description: "Skeleton plugin example command"
+  #Usage message shown to the user if they type the command in incorrectly.
+  usage: "/copy"
+ paste:
+  #Description to show in the Help command
+  description: "Skeleton plugin example command"
+  #Usage message shown to the user if they type the command in incorrectly.
+  usage: "/paste"
+ export:
+   description: "world editor - saves copy by name so it can be loaded later."
+   usage: "/export name without spaces."
+ listexports:
+   description: "Lists saved exports"
+   usage: "/listexports"
