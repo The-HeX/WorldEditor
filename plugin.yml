@@ -39,7 +39,10 @@ commands:
   usage: "/paste"
  export:
    description: "world editor - saves copy by name so it can be loaded later."
-   usage: "/export name without spaces."
+   usage: "/export [name]."
  listexports:
    description: "Lists saved exports"
    usage: "/listexports"
+ import:
+   description: "loads a saved import into the clipboard so you can paste the structure"
+   usage: "/import [name]"

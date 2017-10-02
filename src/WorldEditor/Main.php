@@ -52,7 +52,7 @@ class Main extends PluginBase{
 				}
 				$session =& $this->session($sender);
 				
-				$this->W_paste($session["clipboard"], $sender->getPosition(), $output);
+				$this->W_paste($session["clipboard"], $sender->getPosition(), $output,$args[0]);
 				return true;
 			case "copy":
 				if(!($sender instanceof Player)){					
@@ -83,6 +83,10 @@ class Main extends PluginBase{
 					$sender->sendMessage($value);
 				}				
 				return true;
+			case "import":
+				$session =& $this->session($sender);
+				$session["clipboard"] = $this->W_load($args[0]);
+				return true;
 		default:
 				return false;
 		}
@@ -95,10 +99,18 @@ class Main extends PluginBase{
 
 	public function W_save($clipboard,$name){
 		$path = $this->exportPath ;
-		$fp = fopen(  $path . '.json', 'w');
+		$fp = fopen(  $path . DIRECTORY_SEPARATOR .  $name . '.json', 'w');
 		fwrite($fp, json_encode($clipboard));
 		fclose($fp);		
+		$this->getLogger()->info("Saved export to " . $name);		
 		return;
+	}
+	public function W_load($name){
+		$path = $this->exportPath ;
+		$string = file_get_contents($path  . DIRECTORY_SEPARATOR .  $name . '.json');
+		$json_a = json_decode($string, true);
+		$this->getLogger()->info("imported from " . $name);		
+		return $json_a;
 	}
 	public function &session(Player $issuer){
 		if(!isset($this->sessions[$issuer->getDisplayName()])){
@@ -307,7 +319,12 @@ class Main extends PluginBase{
 		return ($endX - $startX + 1) * ($endY - $startY + 1) * ($endZ - $startZ + 1);
 	}
 
-	private function W_paste($clipboard, Position $pos, &$output = null){
+	// rotate around the Y axis
+	// z' = z*cos q - x*sin q
+	// x' = z*sin q + x*cos q
+	// y' = y
+
+	private function W_paste($clipboard, Position $pos, &$output = null,$rotation=0){
 		if(count($clipboard) !== 2){
 			$output .= "Copy something first.\n";
 			return false;
@@ -317,8 +334,22 @@ class Main extends PluginBase{
 		$clipboard[0][2] += $pos->z - 0.5;
 		$offset = array_map("round", $clipboard[0]);
 		$count = 0;
-		
-		foreach($clipboard[1] as $x => $i){
+		$blocks = $clipboard[1];
+		if($rotation!=0){
+			$rotatedBlocks = array();
+			foreach($blocks as $x => $i){
+				foreach($i as $y => $j){
+					foreach($j as $z => $block){
+						 $rz = $z*cos($rotation) - $x*sin($rotation);
+						 $rx = $z*sin($rotation) + $x*cos($rotation);
+						$ry = $y;
+						$rotatedBlocks[$rx][$ry][$rz]=$block;
+					}
+				}
+			}
+			$blocks=$rotatedBlocks;
+		}
+		foreach($blocks as $x => $i){
 			foreach($i as $y => $j){
 				foreach($j as $z => $block){
 					$b = BlockFactory::get(ord($block{0}), ord($block{1}));
@@ -358,6 +389,22 @@ class Main extends PluginBase{
 			}
 		}
 		$output .= "$count block(s) have been copied.\n";
+
+		$blockArray = array();		
+		$index=0;
+		for($x = $startX; $x <= $endX; ++$x){
+			
+			for($y = $startY; $y <= $endY; ++$y){
+			
+				for($z = $startZ; $z <= $endZ; ++$z){
+					$b = $level->getBlock(new Vector3($x, $y, $z));
+					$blockArray[$index]=new BlockCopy(chr($b->getID()).chr($b->getDamage()),$x - $startX,$y - $startY,$z - $startZ);
+					unset($b);
+					$index++;
+				}
+			}
+		}
+
 		return $blocks;
 	}
 	
@@ -593,4 +640,17 @@ class Main extends PluginBase{
 	}
 
 
+}
+
+class BlockCopy{
+	public function __construct($b,$x,$y,$z){
+        $this->Block=$b;
+		$this->X=$x;
+		$this->Y=$y;
+		$this->Z=$z;
+    }
+	public $X;
+	public $Y;
+	public $Z;
+	public $Block;
 }
