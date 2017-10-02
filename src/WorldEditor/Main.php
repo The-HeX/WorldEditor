@@ -51,8 +51,14 @@ class Main extends PluginBase{
 					return false;
 				}
 				$session =& $this->session($sender);
-				
-				$this->W_paste($session["clipboard"], $sender->getPosition(), $output,$args[0]);
+				if(count($args)>0)
+				{
+					$rotation = $args[0];
+				}
+				else{
+					$rotation=0;
+				}
+				$this->W_paste($session["clipboard"], $sender->getPosition(), $output,$rotation);
 				return true;
 			case "copy":
 				if(!($sender instanceof Player)){					
@@ -108,8 +114,13 @@ class Main extends PluginBase{
 	public function W_load($name){
 		$path = $this->exportPath ;
 		$string = file_get_contents($path  . DIRECTORY_SEPARATOR .  $name . '.json');
-		$json_a = json_decode($string, true);
-		$this->getLogger()->info("imported from " . $name);		
+		$json_a = json_decode($string, true);		
+		$this->getLogger()->info("loaded from " . $name);		
+		$blocks = $json_a[1];
+		foreach($blocks as $index => $block){
+			$json_a[1][$index]= new BlockCopy($block["Block"],$block["X"],$block["Y"],$block["Z"]);
+		}
+		$this->getLogger()->info("proccessing imported file");		
 		return $json_a;
 	}
 	public function &session(Player $issuer){
@@ -335,29 +346,38 @@ class Main extends PluginBase{
 		$offset = array_map("round", $clipboard[0]);
 		$count = 0;
 		$blocks = $clipboard[1];
+
 		if($rotation!=0){
 			$rotatedBlocks = array();
-			foreach($blocks as $x => $i){
-				foreach($i as $y => $j){
-					foreach($j as $z => $block){
-						 $rz = $z*cos($rotation) - $x*sin($rotation);
-						 $rx = $z*sin($rotation) + $x*cos($rotation);
-						$ry = $y;
-						$rotatedBlocks[$rx][$ry][$rz]=$block;
-					}
-				}
+			foreach($blocks as $index => $block){
+				$x = $block->X;
+				$z = $block->Z;
+				$block->Z = $z*cos($rotation) - $x*sin($rotation);
+				$block->X = $z*sin($rotation) + $x*cos($rotation);
+				$rotatedBlocks[$index]=$block;									
 			}
 			$blocks=$rotatedBlocks;
 		}
-		foreach($blocks as $x => $i){
-			foreach($i as $y => $j){
-				foreach($j as $z => $block){
-					$b = BlockFactory::get(ord($block{0}), ord($block{1}));
-					$count += (int) $pos->level->setBlock(new Vector3($x + $offset[0], $y + $offset[1], $z + $offset[2]), $b, false);
-					unset($b);
-				}
-			}
+
+		foreach($blocks as $index => $block){
+			$x = $block->X;
+			$y = $block->Y;
+			$z = $block->Z;
+			$b = BlockFactory::get(ord($block->Block{0}), ord($block->Block{1}));
+			$count += (int) $pos->level->setBlock(new Vector3($x + $offset[0], $y + $offset[1], $z + $offset[2]), $b, false);
+			unset($b);
 		}
+		
+
+		// foreach($blocks as $x => $i){
+		// 	foreach($i as $y => $j){
+		// 		foreach($j as $z => $block){
+		// 			$b = BlockFactory::get(ord($block{0}), ord($block{1}));
+		// 			$count += (int) $pos->level->setBlock(new Vector3($x + $offset[0], $y + $offset[1], $z + $offset[2]), $b, false);
+		// 			unset($b);
+		// 		}
+		// 	}
+		// }
 		$output .= "$count block(s) have been changed.\n";
 		return true;
 	}
@@ -405,7 +425,7 @@ class Main extends PluginBase{
 			}
 		}
 
-		return $blocks;
+		return $blockArray;
 	}
 	
 	private function W_cut($selection, &$output = null){
