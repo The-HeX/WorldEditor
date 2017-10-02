@@ -120,6 +120,8 @@ class Main extends PluginBase{
 		foreach($blocks as $index => $block){
 			$json_a[1][$index]= new BlockCopy($block["Block"],$block["X"],$block["Y"],$block["Z"]);
 		}
+		$json_a[0][0]=0;
+		$json_a[0][1]=0;
 		$this->getLogger()->info("proccessing imported file");		
 		return $json_a;
 	}
@@ -330,10 +332,66 @@ class Main extends PluginBase{
 		return ($endX - $startX + 1) * ($endY - $startY + 1) * ($endZ - $startZ + 1);
 	}
 
-	// rotate around the Y axis
-	// z' = z*cos q - x*sin q
-	// x' = z*sin q + x*cos q
-	// y' = y
+	private function w_shift_on_axis($blocks,$x,$y,$z){
+		foreach($blocks as $index => $block){
+			$block->X=$block->X + $x ;
+			$block->Y=$block->Y + $y ;
+			$block->Z=$block->Z + $z ;			
+		}
+		$this->w_find_axis_boundries($blocks);
+		return $blocks;
+	}
+
+	private function w_rotate_blocks_on_y_axis($inputBlocks,$rotation){
+		$rotatedBlocks = array();
+		foreach($inputBlocks as $index => $block){
+			$x = $block->X;
+			$z = $block->Z;
+			$block->Z = $z*cos($rotation) - $x*sin($rotation);
+			$block->X = $z*sin($rotation) + $x*cos($rotation);
+			$rotatedBlocks[$index]=$block;									
+		}
+		$this->getLogger()->info("rotation ". $rotation);
+		$limits = $this->w_find_axis_boundries($rotatedBlocks);			
+		return $this->w_shift_on_axis( $rotatedBlocks,$limits->minX*-1,$limits->minY*-1,$limits->minZ*-1);	
+	}
+
+	private function w_find_axis_boundries($inputBlocks){
+	$minX=-10000;
+	$minZ=-10000;
+	$minY=-10000;
+	$maxX= 10000;
+	$maxY= 10000;
+	$maxZ= 10000;
+	foreach($inputBlocks as $index => $block){
+		$x = $block->X;
+		$z = $block->Z;
+		$y = $block->Y;
+		$minX = min($x,$minX);
+		$maxX = max($x,$maxX);
+		$minZ = min($z,$minZ);
+		$maxZ = max($z,$maxZ);			
+		$minY = min($y,$minY);
+		$maxY = max($y,$maxY);			
+	}
+	$this->getLogger()->info("minx ". $minX);
+	$this->getLogger()->info("maxx ". $maxX);
+	$this->getLogger()->info("miny ". $minY);
+	$this->getLogger()->info("maxy ". $maxY);
+	$this->getLogger()->info("minz ". $minZ);
+	$this->getLogger()->info("maxz ". $maxZ);
+	
+	$result = new class{};
+	$result->minX = $minX;
+	$result->maxX = $maxX;
+	$result->minY = $minY;
+	$result->maxY = $maxY;
+	$result->minZ = $minZ;
+	$result->maxZ = $maxZ;
+		
+	return $result;
+}
+
 
 	private function W_paste($clipboard, Position $pos, &$output = null,$rotation=0){
 		if(count($clipboard) !== 2){
@@ -345,19 +403,13 @@ class Main extends PluginBase{
 		$clipboard[0][2] += $pos->z - 0.5;
 		$offset = array_map("round", $clipboard[0]);
 		$count = 0;
-		$blocks = $clipboard[1];
+		$blocks = $this->Clone_Array($clipboard[1]);
 
 		if($rotation!=0){
-			$rotatedBlocks = array();
-			foreach($blocks as $index => $block){
-				$x = $block->X;
-				$z = $block->Z;
-				$block->Z = $z*cos($rotation) - $x*sin($rotation);
-				$block->X = $z*sin($rotation) + $x*cos($rotation);
-				$rotatedBlocks[$index]=$block;									
-			}
-			$blocks=$rotatedBlocks;
+			$blocks= $this->w_rotate_blocks_on_y_axis($blocks,$rotation);
 		}
+
+		$this->w_find_axis_boundries($blocks);
 
 		foreach($blocks as $index => $block){
 			$x = $block->X;
@@ -368,20 +420,13 @@ class Main extends PluginBase{
 			unset($b);
 		}
 		
-
-		// foreach($blocks as $x => $i){
-		// 	foreach($i as $y => $j){
-		// 		foreach($j as $z => $block){
-		// 			$b = BlockFactory::get(ord($block{0}), ord($block{1}));
-		// 			$count += (int) $pos->level->setBlock(new Vector3($x + $offset[0], $y + $offset[1], $z + $offset[2]), $b, false);
-		// 			unset($b);
-		// 		}
-		// 	}
-		// }
 		$output .= "$count block(s) have been changed.\n";
 		return true;
 	}
-	
+	private function Clone_Array($old){
+		$new=unserialize(serialize($old));
+		return $new;
+	}
 	private function W_copy($selection, &$output = null){
 		if(!is_array($selection) or $selection[0] === false or $selection[1] === false or $selection[0][3] !== $selection[1][3]){
 			$output .= "Make a selection first.\n";
@@ -397,25 +442,12 @@ class Main extends PluginBase{
 		$startZ = min($selection[0][2], $selection[1][2]);
 		$endZ = max($selection[0][2], $selection[1][2]);
 		$count = $this->countBlocks($selection);
-		for($x = $startX; $x <= $endX; ++$x){
-			$blocks[$x - $startX] = array();
-			for($y = $startY; $y <= $endY; ++$y){
-				$blocks[$x - $startX][$y - $startY] = array();
-				for($z = $startZ; $z <= $endZ; ++$z){
-					$b = $level->getBlock(new Vector3($x, $y, $z));
-					$blocks[$x - $startX][$y - $startY][$z - $startZ] = chr($b->getID()).chr($b->getDamage());
-					unset($b);
-				}
-			}
-		}
 		$output .= "$count block(s) have been copied.\n";
 
 		$blockArray = array();		
 		$index=0;
-		for($x = $startX; $x <= $endX; ++$x){
-			
-			for($y = $startY; $y <= $endY; ++$y){
-			
+		for($x = $startX; $x <= $endX; ++$x){			
+			for($y = $startY; $y <= $endY; ++$y){			
 				for($z = $startZ; $z <= $endZ; ++$z){
 					$b = $level->getBlock(new Vector3($x, $y, $z));
 					$blockArray[$index]=new BlockCopy(chr($b->getID()).chr($b->getDamage()),$x - $startX,$y - $startY,$z - $startZ);
@@ -424,7 +456,7 @@ class Main extends PluginBase{
 				}
 			}
 		}
-
+		$this->w_find_axis_boundries($blockArray);
 		return $blockArray;
 	}
 	
